@@ -1,20 +1,57 @@
-import { createConfig } from "ponder";
+import {createConfig} from "ponder";
 
-import { ExampleContractAbi } from "./abis/ExampleContractAbi";
+import {AgentRegistryAbi} from "./abis/AgentRegistry";
+import {LiquidReputationAbi} from "./abis/LiquidReputation";
+import {RewardDistributorAbi} from "./abis/RewardDistributor";
+import {SortinoOracleAbi} from "./abis/SortinoOracle";
+import {SquadiumAbi} from "./abis/Squadium";
 
+/**
+ * Squadium indexer config — Mantle Sepolia first, will add mainnet at W3.
+ *
+ * Addresses are env-driven so we redeploy → patch .env.local → restart.
+ * START_BLOCK should be set to the deployment block to avoid scanning the
+ * full chain.
+ */
 export default createConfig({
   chains: {
-    mainnet: {
-      id: 1,
-      rpc: process.env.PONDER_RPC_URL_1!,
+    mantleSepolia: {
+      id: 5003,
+      rpc: process.env.PONDER_RPC_URL_5003 ?? "https://rpc.sepolia.mantle.xyz",
     },
   },
   contracts: {
-    ExampleContract: {
-      chain: "mainnet",
-      abi: ExampleContractAbi,
-      address: "0x0000000000000000000000000000000000000000",
-      startBlock: 1234567,
+    AgentRegistry: {
+      chain: "mantleSepolia",
+      abi: AgentRegistryAbi,
+      address: (process.env.AGENT_REGISTRY_ADDRESS ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
+      startBlock: Number(process.env.START_BLOCK ?? 0),
+    },
+    Squadium: {
+      chain: "mantleSepolia",
+      abi: SquadiumAbi,
+      address: (process.env.SQUADIUM_ADDRESS ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
+      startBlock: Number(process.env.START_BLOCK ?? 0),
+    },
+    LiquidReputation: {
+      chain: "mantleSepolia",
+      abi: LiquidReputationAbi,
+      address: (process.env.LIQUID_REPUTATION_ADDRESS ??
+        "0x0000000000000000000000000000000000000000") as `0x${string}`,
+      startBlock: Number(process.env.START_BLOCK ?? 0),
+    },
+    RewardDistributor: {
+      chain: "mantleSepolia",
+      abi: RewardDistributorAbi,
+      address: (process.env.REWARD_DISTRIBUTOR_ADDRESS ??
+        "0x0000000000000000000000000000000000000000") as `0x${string}`,
+      startBlock: Number(process.env.START_BLOCK ?? 0),
+    },
+    SortinoOracle: {
+      chain: "mantleSepolia",
+      abi: SortinoOracleAbi,
+      address: (process.env.SORTINO_ORACLE_ADDRESS ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
+      startBlock: Number(process.env.START_BLOCK ?? 0),
     },
   },
 });
