@@ -9,17 +9,19 @@
     "db": "ponder db",
     "codegen": "ponder codegen",
     "lint": "eslint .",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "ccri": "tsx ccri/run.ts"
   },
   "dependencies": {
-    "ponder": "^0.16.6",
     "hono": "^4.5.0",
+    "ponder": "^0.16.6",
     "viem": "^2.21.3"
   },
   "devDependencies": {
     "@types/node": "^20.9.0",
     "eslint": "^8.53.0",
     "eslint-config-ponder": "^0.16.6",
+    "tsx": "^4.22.1",
     "typescript": "^5.2.2"
   },
   "engines": {
