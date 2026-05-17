@@ -16,3 +16,6 @@ yarn-error.log*
 # Ponder
 /generated/
 /.ponder/
+
+# CCRI runtime calibration state (regenerated each cycle)
+/ccri/.calibration.json
