@@ -1,9 +1,9 @@
 import {createConfig} from "ponder";
 
 import {AgentRegistryAbi} from "./abis/AgentRegistry";
+import {AgentReputationOracleAbi} from "./abis/AgentReputationOracle";
 import {LiquidReputationAbi} from "./abis/LiquidReputation";
 import {RewardDistributorAbi} from "./abis/RewardDistributor";
-import {SortinoOracleAbi} from "./abis/SortinoOracle";
 import {SquadiumAbi} from "./abis/Squadium";
 
 /**
@@ -47,10 +47,11 @@ export default createConfig({
         "0x0000000000000000000000000000000000000000") as `0x${string}`,
       startBlock: Number(process.env.START_BLOCK ?? 0),
     },
-    SortinoOracle: {
+    AgentReputationOracle: {
       chain: "mantleSepolia",
-      abi: SortinoOracleAbi,
-      address: (process.env.SORTINO_ORACLE_ADDRESS ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
+      abi: AgentReputationOracleAbi,
+      address: (process.env.AGENT_REPUTATION_ORACLE_ADDRESS ??
+        "0x0000000000000000000000000000000000000000") as `0x${string}`,
       startBlock: Number(process.env.START_BLOCK ?? 0),
     },
   },

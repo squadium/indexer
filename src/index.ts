@@ -1,5 +1,5 @@
 import {ponder} from "ponder:registry";
-import {agent, grant, sortinoUpdate, squad, stake, stakePool} from "ponder:schema";
+import {agent, crowdSignal, grant, reputation, sortinoUpdate, squad, stake, stakePool} from "ponder:schema";
 
 // ════════════════════════════════════════════════════════════════════════
 // AgentRegistry
@@ -76,14 +76,38 @@ ponder.on("Squadium:SquadDrafted", async ({event, context}) => {
       draftedAt: event.block.timestamp,
     });
 
-  // Bump lifetimeAppearances + captainCount for each drafted agent
+  // Bump lifetime counters + accumulate weekly crowd signal per drafted agent
   for (let i = 0; i < 5; i++) {
     const drafted = agentIds[i]!;
     const isCaptain = i === Number(captainIdx);
+
     await context.db.update(agent, {id: drafted}).set((row) => ({
       lifetimeAppearances: row.lifetimeAppearances + 1,
       captainCount: row.captainCount + (isCaptain ? 1 : 0),
     }));
+
+    // Snapshot current stake depth for the crowd-prior feature
+    const pool = await context.db.find(stakePool, {id: drafted});
+    const stakeDepth = pool?.totalStaked ?? 0n;
+
+    const csId = `${weekId}-${drafted}`;
+    await context.db
+      .insert(crowdSignal)
+      .values({
+        id: csId,
+        weekId,
+        agentId: drafted,
+        draftCount: 1,
+        captainCount: isCaptain ? 1 : 0,
+        stakeDepth,
+        updatedAt: event.block.timestamp,
+      })
+      .onConflictDoUpdate((row) => ({
+        draftCount: row.draftCount + 1,
+        captainCount: row.captainCount + (isCaptain ? 1 : 0),
+        stakeDepth,
+        updatedAt: event.block.timestamp,
+      }));
   }
 });
 
@@ -195,18 +219,53 @@ ponder.on("RewardDistributor:RewardClaimed", async ({event, context}) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════
-// SortinoOracle — append-only history
+// AgentReputationOracle — CCRI reputation feed
 // ════════════════════════════════════════════════════════════════════════
 
-ponder.on("SortinoOracle:SortinoPushed", async ({event, context}) => {
+ponder.on("AgentReputationOracle:ReputationPushed", async ({event, context}) => {
+  const {agentId, score, confidence, tier, asOf, horizon} = event.args;
+
+  await context.db
+    .insert(reputation)
+    .values({
+      id: agentId,
+      score: Number(score),
+      confidence: Number(confidence),
+      tier: Number(tier),
+      asOf,
+      horizon,
+      nonce: 0n, // filled from the paired SortinoPushed event below
+      updatedAt: event.block.timestamp,
+    })
+    .onConflictDoUpdate({
+      score: Number(score),
+      confidence: Number(confidence),
+      tier: Number(tier),
+      asOf,
+      horizon,
+      updatedAt: event.block.timestamp,
+    });
+
+  // Mirror tier onto the agent row so the game/leaderboard stay consistent
+  await context.db.update(agent, {id: agentId}).set({
+    tier: Number(tier),
+    lastUpdate: event.block.timestamp,
+  });
+});
+
+// Back-compat: AgentReputationOracle still emits SortinoPushed (score mirrored).
+// Keep the append-only history table flowing without a pipeline rewrite.
+ponder.on("AgentReputationOracle:SortinoPushed", async ({event, context}) => {
   const {agentId, sortinoBps, nonce} = event.args;
-  const id = `${agentId}-${nonce}`;
 
   await context.db.insert(sortinoUpdate).values({
-    id,
+    id: `${agentId}-${nonce}`,
     agentId,
     sortinoBps,
     nonce,
     timestamp: event.block.timestamp,
   });
+
+  // Backfill the nonce on the latest reputation row
+  await context.db.update(reputation, {id: agentId}).set({nonce});
 });

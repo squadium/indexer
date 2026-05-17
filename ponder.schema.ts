@@ -105,7 +105,8 @@ export const grant = onchainTable(
 );
 
 // ────────────────────────────────────────────────────────────────────────
-// SortinoUpdate — append-only history of on-chain Sortino pushes
+// SortinoUpdate — append-only history of on-chain reputation pushes
+// (kept for indexer back-compat; AgentReputationOracle still emits SortinoPushed)
 // ────────────────────────────────────────────────────────────────────────
 export const sortinoUpdate = onchainTable(
   "sortino_update",
@@ -117,6 +118,49 @@ export const sortinoUpdate = onchainTable(
     timestamp: t.bigint().notNull(),
   }),
   (table) => ({
+    agentIdx: index().on(table.agentId),
+  }),
+);
+
+// ────────────────────────────────────────────────────────────────────────
+// Reputation — latest CCRI reputation per agent (mirror of on-chain oracle)
+// ────────────────────────────────────────────────────────────────────────
+export const reputation = onchainTable(
+  "reputation",
+  (t) => ({
+    id: t.bigint().primaryKey(), // agentId
+    score: t.integer().notNull(), // 0..10000 forward risk-adjusted
+    confidence: t.integer().notNull(), // 0..10000 (= 0-100.00%)
+    tier: t.integer().notNull(), // 1..5
+    asOf: t.bigint().notNull(), // inference timestamp
+    horizon: t.bigint().notNull(), // prediction horizon (seconds)
+    nonce: t.bigint().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    scoreIdx: index().on(table.score),
+    tierIdx: index().on(table.tier),
+  }),
+);
+
+// ────────────────────────────────────────────────────────────────────────
+// CrowdSignal — per (weekId, agentId) crowd-prior inputs for CCRI calibration.
+// Derived on-chain from SquadDrafted events + stake pool snapshots. This is the
+// indexer's contribution to the CCRI feature store (the "crowd" half).
+// ────────────────────────────────────────────────────────────────────────
+export const crowdSignal = onchainTable(
+  "crowd_signal",
+  (t) => ({
+    id: t.text().primaryKey(), // `${weekId}-${agentId}`
+    weekId: t.bigint().notNull(),
+    agentId: t.bigint().notNull(),
+    draftCount: t.integer().notNull().default(0), // # squads picking this agent this week
+    captainCount: t.integer().notNull().default(0), // # squads captaining this agent this week
+    stakeDepth: t.bigint().notNull().default(0n), // mETH staked on agent (pool snapshot)
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    weekIdx: index().on(table.weekId),
     agentIdx: index().on(table.agentId),
   }),
 );
