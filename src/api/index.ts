@@ -3,6 +3,14 @@ import schema from "ponder:schema";
 import {Hono} from "hono";
 import {client, graphql, eq, desc} from "ponder";
 
+// Serialize bigint columns (sortinoBps, volume30d, totalStaked, …) as strings.
+// JSON.stringify throws on BigInt by default; matches the wire types in
+// frontend lib/indexer.ts (AgentRow.sortinoBps: string etc).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 const app = new Hono();
 
 // Default Ponder routes — GraphQL + SQL-over-HTTP
