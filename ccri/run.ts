@@ -15,6 +15,7 @@
 import {blend, loadCalibration, saveCalibration, type Calibration} from "./blend";
 import {crowdPrior} from "./crowd";
 import {loadCrowdFeatures, loadPerfFeatures} from "./features";
+import {loadMarketContext} from "./market";
 import {runModel} from "./model";
 import {currentNonce, pushReputation} from "./push";
 import {signReputation} from "./sign";
@@ -27,19 +28,25 @@ async function main() {
   const calib: Calibration = loadCalibration();
   console.log(`[ccri] calibration a=${calib.a.toFixed(3)} cycles=${calib.cycles} ${DRY_RUN ? "(DRY-RUN)" : ""}`);
 
-  const perf = await loadPerfFeatures(200);
-  const crowd = await loadCrowdFeatures(WEEK_ID);
+  const [perf, crowd, market] = await Promise.all([
+    loadPerfFeatures(200),
+    loadCrowdFeatures(WEEK_ID),
+    loadMarketContext(),
+  ]);
   const totalDrafts = [...crowd.values()].reduce((a, c) => a + c.draftCount, 0);
   const uniqueDrafters = totalDrafts; // proxy; refined when per-manager index lands
 
-  console.log(`[ccri] agents=${perf.length} crowdRows=${crowd.size} totalDrafts=${totalDrafts}`);
+  console.log(
+    `[ccri] agents=${perf.length} crowdRows=${crowd.size} totalDrafts=${totalDrafts} ` +
+      `market=${market.regime} (eth=${(market.ethVol7d * 100).toFixed(1)}% btc=${(market.btcVol7d * 100).toFixed(1)}% · ${market.source})`,
+  );
 
   const oracle = (process.env.AGENT_REPUTATION_ORACLE_ADDRESS ?? "0x0") as `0x${string}`;
   const asOf = BigInt(Math.floor(Date.now() / 1000));
 
   let pushed = 0;
   for (const f of perf) {
-    const m = runModel(f);
+    const m = runModel(f, market);
     const cp = crowdPrior(crowd.get(f.agentId), totalDrafts, uniqueDrafters);
     const b = blend(m.rModel, m.confidence, cp.rCrowd, cp.depth, calib);
 

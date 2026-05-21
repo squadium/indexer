@@ -8,6 +8,7 @@
  * Output: forward risk-adjusted score in [0,10000] + a confidence in [0,10000]
  * that widens (drops) when an agent's history is thin.
  */
+import {confidenceMultiplier, type MarketContext} from "./market";
 import {clamp01, toBps, type PerfFeatures} from "./types";
 
 /** Feature weights — sum to 1.0. Tunable; documented for auditability. */
@@ -32,7 +33,7 @@ export interface ModelOutput {
   parts: Record<string, number>; // per-feature contribution (audit trail)
 }
 
-export function runModel(f: PerfFeatures): ModelOutput {
+export function runModel(f: PerfFeatures, market?: MarketContext): ModelOutput {
   const parts: Record<string, number> = {
     sortino30d: WEIGHTS.sortino30d * sortinoTo01(f.sortino30d),
     sortino7d: WEIGHTS.sortino7d * sortinoTo01(f.sortino7d),
@@ -49,7 +50,11 @@ export function runModel(f: PerfFeatures): ModelOutput {
   // Thin history → low confidence → downstream consumers gate it out.
   const historyConf = clamp01(f.tradeCount7d / 60); // 60+ trades ⇒ full
   const breadthConf = clamp01(f.venueDiversity / 3);
-  const confidence = toBps(0.65 * historyConf + 0.35 * breadthConf);
+  let confidence01 = 0.65 * historyConf + 0.35 * breadthConf;
 
-  return {rModel: toBps(score01), confidence, parts};
+  // Market-regime adjustment: stormy crypto vol → lower confidence across the
+  // board (Pyth ETH+BTC 7d realized vol → calm/normal/stormy → multiplier).
+  if (market) confidence01 *= confidenceMultiplier(market);
+
+  return {rModel: toBps(score01), confidence: toBps(confidence01), parts};
 }
