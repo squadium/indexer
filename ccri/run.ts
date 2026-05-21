@@ -12,6 +12,10 @@
  *   pnpm ccri --dry-run    # compute + print, no transactions
  *   WEEK_ID=3 pnpm ccri    # crowd window (defaults to 1)
  */
+// MUST be first import: side-effect-only loader so process.env is populated
+// before push.ts captures RPC / oracle constants at module top-level.
+import "./env-bootstrap";
+
 import {blend, loadCalibration, saveCalibration, type Calibration} from "./blend";
 import {crowdPrior} from "./crowd";
 import {loadCrowdFeatures, loadPerfFeatures} from "./features";

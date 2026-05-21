@@ -38,14 +38,28 @@ export async function currentNonce(agentId: bigint): Promise<bigint> {
   }) as Promise<bigint>;
 }
 
+// Client-side EOA nonce cache: Mantle RPC propagation lag means even the
+// "pending" blockTag returns stale values seconds after a tx is mined.
+// Track locally: query once, then ++ per successful send.
+let _localNonce: number | null = null;
+
+async function nextEoaNonce(): Promise<number> {
+  const {account, pub} = clients();
+  if (_localNonce === null) {
+    _localNonce = await pub.getTransactionCount({address: account.address, blockTag: "latest"});
+  }
+  return _localNonce++;
+}
+
 export async function pushReputation(
   agentId: bigint,
   rep: Reputation,
   nonce: bigint,
   sig: Hex,
 ): Promise<Hex> {
-  const {wallet} = clients();
-  return wallet.writeContract({
+  const {pub, wallet} = clients();
+  const eoaNonce = await nextEoaNonce();
+  const hash = await wallet.writeContract({
     address: ORACLE,
     abi: AgentReputationOracleAbi,
     functionName: "pushReputation",
@@ -61,7 +75,12 @@ export async function pushReputation(
       nonce,
       sig,
     ],
+    nonce: eoaNonce,
   });
+  // Wait for inclusion before returning so the next loop iteration sees the
+  // bumped nonce on the RPC's "pending" view.
+  await pub.waitForTransactionReceipt({hash, confirmations: 1});
+  return hash;
 }
 
 export const oracleAddress = ORACLE;

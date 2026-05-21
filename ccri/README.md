@@ -80,7 +80,28 @@ forward score + confidence + tier for each. Confidence is honest-low (~20%)
 across the board because `lifetimeAppearances=0` for freshly registered
 agents — exactly the "thin history → wide interval" behaviour from spec §3.3.
 
-Drop `--dry-run` to push these reputations on-chain via signed `pushReputation()`.
+### Full push cycle (no `--dry-run`)
+
+Run `pnpm ccri` after setting `ORACLE_SIGNER_KEY`. The first cycle (2026-05-19)
+pushed all 10 signed reputations on-chain — `cast` verification:
+
+```
+$ cast call AgentReputationOracle reputationOf(uint256)((uint16,uint16,uint8,uint64,uint64)) 42 \
+    --rpc-url https://rpc.sepolia.mantle.xyz
+(7297, 1905, 3, 1779371844, 604800)
+#  score, confidence, tier, asOf, horizon
+
+$ for id in 42 17 31 88 64 103 255 145 7 211; do
+    cast call AgentReputationOracle "isRated(uint256)(bool)" $id ...
+  done
+# all 10 → true
+```
+
+`ReputationGatedPool.eligible(42)` returns **false** for all currently-rated
+agents — correct per spec §7: their `confidence=1905` (19.05 %) is below the
+60 % consumer gate. The protocol is being **honest about uncertainty** at
+cold-start, not faking precision. Drafts populate the crowd prior in future
+cycles → confidence rises → consumer gate opens.
 
 ## Design stance (restraint — spec §10)
 
