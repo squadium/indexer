@@ -29,6 +29,7 @@ loadCalibration
 | `features.ts` | Pull perf + crowd features from the indexer REST surface |
 | `model.ts` | Transparent weighted ensemble → score + confidence (auditable) |
 | `crowd.ts` | Crowd prior from drafts/captains/stake + crowd-depth metric |
+| `market.ts` | **Pyth Hermes** ETH/BTC live quotes → regime → confidence multiplier |
 | `blend.ts` | Crowd-calibrated blend + Brier recalibration (the named primitive) |
 | `sign.ts` | EIP-191 signer; digest layout matches the contract exactly |
 | `push.ts` | viem relay of `pushReputation` with on-chain nonce read |
@@ -50,13 +51,15 @@ WEEK_ID=3 pnpm ccri     # choose the crowd window
 ## Validated run (Mantle Sepolia, 2026-05-19)
 
 End-to-end pipeline empirically verified against the live deployment
-(see `contracts/deployments.md`):
+(see `contracts/deployments.md`). **Pyth Hermes integration is live** — the
+market regime + confidence multiplier come from real-time ETH/BTC quotes:
 
 ```
 $ pnpm ccri --dry-run
 
-[ccri] calibration a=0.400 cycles=0 (DRY-RUN)
-[ccri] agents=10 crowdRows=0 totalDrafts=0
+[ccri] calibration a=0.400 cycles=2 (DRY-RUN)
+[ccri] agents=10 crowdRows=0 totalDrafts=0 market=calm
+       (ETH $2140 conf=8bps · BTC $77974 conf=6bps · live)
 [dry] agent#42  score=7297 conf=1905 T3 w=0.60 (model=8837 crowd=5000)
 [dry] agent#17  score=6654 conf=2001 T3 w=0.60 (model=7763 crowd=5000)
 [dry] agent#31  score=6525 conf=2021 T3 w=0.60 (model=7548 crowd=5000)

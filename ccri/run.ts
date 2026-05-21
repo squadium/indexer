@@ -38,7 +38,8 @@ async function main() {
 
   console.log(
     `[ccri] agents=${perf.length} crowdRows=${crowd.size} totalDrafts=${totalDrafts} ` +
-      `market=${market.regime} (eth=${(market.ethVol7d * 100).toFixed(1)}% btc=${(market.btcVol7d * 100).toFixed(1)}% · ${market.source})`,
+      `market=${market.regime} (ETH $${market.ethPrice.toFixed(0)} conf=${market.ethConfBps}bps · ` +
+      `BTC $${market.btcPrice.toFixed(0)} conf=${market.btcConfBps}bps · ${market.source})`,
   );
 
   const oracle = (process.env.AGENT_REPUTATION_ORACLE_ADDRESS ?? "0x0") as `0x${string}`;

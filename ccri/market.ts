@@ -1,11 +1,16 @@
 /**
  * Market context — real signal from Pyth Hermes.
  *
- * We pull historical ETH/USD + BTC/USD prices and compute realized
- * volatility + a coarse regime indicator. The model uses this to
- * **adjust confidence**: a high-volatility regime tightens (lowers)
- * confidence across the board, so consumers like ReputationGatedPool
- * gate on stricter thresholds when markets are noisy.
+ * Single `/v2/updates/price/latest` call for ETH/USD + BTC/USD, deriving an
+ * instantaneous market-stress signal from Pyth's confidence intervals.
+ * The model uses this to **adjust confidence**: a stressed market tightens
+ * (lowers) confidence across the board, so consumers like
+ * ReputationGatedPool gate on stricter thresholds in noisy conditions.
+ *
+ * Why not historical vol? Pyth Hermes' free public endpoint rate-limits
+ * historical lookups (429 in our tests); the confidence ratio is a real
+ * live signal that ships in one request and keeps the dependency on a
+ * public-good endpoint. Annualized realized-vol pipeline is a v2 upgrade.
  *
  * Source: https://hermes.pyth.network (free, no auth)
  */
@@ -21,64 +26,63 @@ const FEEDS = {
 export type Regime = "calm" | "normal" | "stormy";
 
 export interface MarketContext {
-  ethVol7d: number; // annualized stdev of daily log-returns
-  btcVol7d: number;
+  ethConfBps: number; // Pyth conf interval as bps of price (live stress proxy)
+  btcConfBps: number;
+  ethPrice: number;
+  btcPrice: number;
+  publishTime: number;
   regime: Regime;
   source: "live" | "mock";
 }
 
 interface ParsedPrice {
   id: string;
-  price: {price: string; expo: number; publish_time: number};
+  price: {price: string; conf: string; expo: number; publish_time: number};
 }
 
-/** Daily samples for the last `days` days (00:00 UTC anchors). */
-async function fetchDailyPrices(feedId: string, days: number): Promise<number[]> {
-  const now = Math.floor(Date.now() / 1000);
-  const day = 24 * 60 * 60;
-  const prices: number[] = [];
-  for (let i = days; i >= 0; i--) {
-    const ts = now - i * day;
-    const url = `${HERMES}/v2/updates/price/${ts}?ids[]=${feedId}&parsed=true&encoding=hex`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`hermes ${ts} → ${res.status}`);
-    const data = (await res.json()) as {parsed: ParsedPrice[]};
-    const p = data.parsed?.[0]?.price;
-    if (!p) throw new Error(`no parsed price at ${ts}`);
-    const raw = Number(p.price);
-    const scaled = raw * Math.pow(10, p.expo); // expo is negative
-    prices.push(scaled);
-  }
-  return prices;
+function regimeOf(ethBps: number, btcBps: number): Regime {
+  const m = (ethBps + btcBps) / 2;
+  if (m < 8) return "calm"; // < 8 bps avg = institutional-grade quote
+  if (m < 25) return "normal";
+  return "stormy"; // > 25 bps = wide spreads, exchange stress
 }
 
-/** Annualized realized vol from a series of daily prices. */
-function realizedVol(prices: number[]): number {
-  if (prices.length < 2) return 0;
-  const rets: number[] = [];
-  for (let i = 1; i < prices.length; i++) {
-    rets.push(Math.log(prices[i]! / prices[i - 1]!));
-  }
-  const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
-  const variance = rets.reduce((a, r) => a + (r - mean) ** 2, 0) / rets.length;
-  return Math.sqrt(variance * 365);
-}
-
-function regimeOf(ethVol: number, btcVol: number): Regime {
-  const m = (ethVol + btcVol) / 2;
-  if (m < 0.45) return "calm";
-  if (m < 0.85) return "normal";
-  return "stormy";
-}
-
-const MOCK: MarketContext = {ethVol7d: 0.62, btcVol7d: 0.48, regime: "normal", source: "mock"};
+const MOCK: MarketContext = {
+  ethConfBps: 12,
+  btcConfBps: 9,
+  ethPrice: 3_200,
+  btcPrice: 64_000,
+  publishTime: Math.floor(Date.now() / 1000),
+  regime: "normal",
+  source: "mock",
+};
 
 export async function loadMarketContext(): Promise<MarketContext> {
   try {
-    const [eth, btc] = await Promise.all([fetchDailyPrices(FEEDS.ETH_USD, 7), fetchDailyPrices(FEEDS.BTC_USD, 7)]);
-    const ethVol = realizedVol(eth);
-    const btcVol = realizedVol(btc);
-    return {ethVol7d: ethVol, btcVol7d: btcVol, regime: regimeOf(ethVol, btcVol), source: "live"};
+    const url = `${HERMES}/v2/updates/price/latest?ids[]=${FEEDS.ETH_USD}&ids[]=${FEEDS.BTC_USD}&parsed=true&encoding=hex`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`hermes /latest → ${res.status}`);
+    const data = (await res.json()) as {parsed: ParsedPrice[]};
+    const byId: Record<string, ParsedPrice["price"] | undefined> = {};
+    for (const p of data.parsed ?? []) byId[p.id.toLowerCase()] = p.price;
+    const eth = byId[FEEDS.ETH_USD.slice(2).toLowerCase()];
+    const btc = byId[FEEDS.BTC_USD.slice(2).toLowerCase()];
+    if (!eth || !btc) throw new Error("missing parsed price for ETH or BTC");
+
+    const ethPrice = Number(eth.price) * Math.pow(10, eth.expo);
+    const btcPrice = Number(btc.price) * Math.pow(10, btc.expo);
+    const ethConfBps = Math.round((Number(eth.conf) * Math.pow(10, eth.expo)) / ethPrice * 10_000);
+    const btcConfBps = Math.round((Number(btc.conf) * Math.pow(10, btc.expo)) / btcPrice * 10_000);
+
+    return {
+      ethConfBps,
+      btcConfBps,
+      ethPrice,
+      btcPrice,
+      publishTime: eth.publish_time,
+      regime: regimeOf(ethConfBps, btcConfBps),
+      source: "live",
+    };
   } catch (e) {
     console.warn("[ccri/market] Pyth Hermes unreachable, using mock context:", (e as Error).message);
     return MOCK;
