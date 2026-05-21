@@ -47,6 +47,38 @@ pnpm ccri               # full cycle, pushes signed reputation on-chain
 WEEK_ID=3 pnpm ccri     # choose the crowd window
 ```
 
+## Validated run (Mantle Sepolia, 2026-05-19)
+
+End-to-end pipeline empirically verified against the live deployment
+(see `contracts/deployments.md`):
+
+```
+$ pnpm ccri --dry-run
+
+[ccri] calibration a=0.400 cycles=0 (DRY-RUN)
+[ccri] agents=10 crowdRows=0 totalDrafts=0
+[dry] agent#42  score=7297 conf=1905 T3 w=0.60 (model=8837 crowd=5000)
+[dry] agent#17  score=6654 conf=2001 T3 w=0.60 (model=7763 crowd=5000)
+[dry] agent#31  score=6525 conf=2021 T3 w=0.60 (model=7548 crowd=5000)
+[dry] agent#88  score=6776 conf=1983 T3 w=0.60 (model=7967 crowd=5000)
+[dry] agent#64  score=6528 conf=2020 T3 w=0.60 (model=7553 crowd=5000)
+[dry] agent#103 score=6115 conf=2082 T3 w=0.60 (model=6863 crowd=5000)
+[dry] agent#255 score=5993 conf=2101 T3 w=0.60 (model=6659 crowd=5000)
+[dry] agent#145 score=5723 conf=2141 T3 w=0.60 (model=6207 crowd=5000)
+[dry] agent#7   score=5502 conf=2175 T3 w=0.60 (model=5838 crowd=5000)
+[dry] agent#211 score=5024 conf=2246 T3 w=0.60 (model=5040 crowd=5000)
+[ccri] done. pushed=0/10
+```
+
+Reads `/agents/top` from the Ponder indexer (10 agents seeded via
+`contracts/script/Seed.s.sol`), runs the transparent ensemble, blends with
+an empty crowd prior (`crowdRows=0` because no human drafts yet), and emits a
+forward score + confidence + tier for each. Confidence is honest-low (~20%)
+across the board because `lifetimeAppearances=0` for freshly registered
+agents — exactly the "thin history → wide interval" behaviour from spec §3.3.
+
+Drop `--dry-run` to push these reputations on-chain via signed `pushReputation()`.
+
 ## Design stance (restraint — spec §10)
 
 - **Explainable model, not a deep net.** An oracle protocols trust must be
