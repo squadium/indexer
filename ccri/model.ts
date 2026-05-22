@@ -48,7 +48,9 @@ export function runModel(f: PerfFeatures, market?: MarketContext): ModelOutput {
 
   // Confidence: more trades + more venue diversity → tighter prediction.
   // Thin history → low confidence → downstream consumers gate it out.
-  const historyConf = clamp01(f.tradeCount7d / 60); // 60+ trades ⇒ full
+  // 25 weekly interactions ⇒ an established agent (was 60; recalibrated to
+  // hackathon-scale activity where ~25 draft/trade events is materially active).
+  const historyConf = clamp01(f.tradeCount7d / 25);
   const breadthConf = clamp01(f.venueDiversity / 3);
   let confidence01 = 0.65 * historyConf + 0.35 * breadthConf;
 

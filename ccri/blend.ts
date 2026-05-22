@@ -64,12 +64,17 @@ export function blend(
   const w = clamp01(sigmoid(calib.a - B * crowdDepth));
   const score = Math.round(w * rModel + (1 - w) * rCrowd);
 
-  // Final confidence: model's own confidence, lifted when model & crowd AGREE,
-  // cut when they DIVERGE (spec §3.1 — honest uncertainty).
+  // Final confidence (spec §3.1 — honest uncertainty). Three independent
+  // signals tighten the posterior:
+  //   base       — model's own confidence, lifted by model↔crowd agreement
+  //   crowdBonus — independent corroboration: a DEEP crowd that AGREES adds
+  //                confidence; a thin or disagreeing crowd adds ~nothing.
+  // This is what makes drafting *raise* an agent's confidence — the
+  // calibration flywheel. Cold-start (no crowd) → base only → stays low.
   const agreement = 1 - Math.abs(rModel - rCrowd) / 10_000; // 0..1
-  const confidence = Math.round(
-    clamp01((modelConf / 10_000) * (0.6 + 0.4 * agreement)) * 10_000,
-  );
+  const base = (modelConf / 10_000) * (0.6 + 0.4 * agreement);
+  const crowdBonus = 0.35 * crowdDepth * agreement;
+  const confidence = Math.round(clamp01(base + crowdBonus) * 10_000);
 
   return {score, confidence, w};
 }
