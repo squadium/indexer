@@ -97,11 +97,34 @@ $ for id in 42 17 31 88 64 103 255 145 7 211; do
 # all 10 → true
 ```
 
-`ReputationGatedPool.eligible(42)` returns **false** for all currently-rated
-agents — correct per spec §7: their `confidence=1905` (19.05 %) is below the
-60 % consumer gate. The protocol is being **honest about uncertainty** at
-cold-start, not faking precision. Drafts populate the crowd prior in future
-cycles → confidence rises → consumer gate opens.
+### Flywheel proven (after SeedDrafts)
+
+`script/SeedDrafts.s.sol` had 10 manager wallets draft squads (week 1, 50
+picks). Re-indexing populated the crowd prior (`crowdRows=9, totalDrafts=50`),
+and a fresh `pnpm ccri` cycle shows confidence **rising with crowd participation**:
+
+```
+agent#42  (drafted 6×, captained 4×)  score=7057 conf=7034 (70%)  → eligible TRUE
+agent#88  (drafted 5×, captained 4×)  score=6661 conf=9501 (95%)  → eligible TRUE
+agent#17  (drafted 4×)                score=5798 conf=7202 (72%)  → eligible TRUE
+agent#64  (drafted 6×)                score=5121 conf=6494 (65%)  → eligible TRUE
+agent#31  (NEVER drafted)             score=6525 conf=3383 (34%)  → eligible FALSE
+```
+
+The money shot — two **T3** agents, opposite outcomes, verified on-chain:
+
+```
+$ cast call ReputationGatedPool "borrowRateBps(uint256)(uint16)" 42   # drafted
+636                                   # 6.36% — discounted from 12% base by reputation
+
+$ cast call ReputationGatedPool "borrowRateBps(uint256)(uint16)" 31   # never drafted
+execution reverted: ConfidenceTooLow # 0x94f921e3
+```
+
+**Drafting an agent earns it trust → confidence crosses the 60 % gate →
+the lending pool prices it.** An identically-tiered agent that no human
+backed stays gated. The crowd-calibration loop literally controls capital
+access. This is the thesis, live on Mantle Sepolia.
 
 ## Design stance (restraint — spec §10)
 
