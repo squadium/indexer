@@ -96,23 +96,53 @@ The worker that computes Sortino + Nansen enrichment is separate from this index
 
 ## Production deployment
 
+A `Dockerfile` + `railway.json` ship in this repo, so the deployed frontend
+can read **live** data instead of the labelled mock fallback.
+
+### Railway (one-command)
+
 ```bash
-# 1. Provision Postgres (Railway / Render / Neon / Supabase)
-export DATABASE_URL="postgresql://..."
-export DATABASE_SCHEMA="squadium_prod"
-
-# 2. Set RPC + contract addresses
-export PONDER_RPC_URL_5003="..."
-export AGENT_REGISTRY_ADDRESS="0x..."
-# ... etc
-
-# 3. Run
-pnpm start
+# from the indexer/ directory
+railway init                 # link/create a project
+railway add --database postgres   # provision Postgres
+railway up                   # build the Dockerfile + deploy
 ```
 
-Recommended hosting: **Railway** or **Fly.io**.
-- Use `<50ms` roundtrip Postgres for best throughput
-- Health: `/ready` returns 200 only when indexing is caught up — point your uptime monitor here
+Then set the service variables (Railway dashboard → Variables), copying from
+`.env.local.example` — `DATABASE_URL` is injected by the Postgres plugin:
+
+```
+DATABASE_SCHEMA=squadium_prod
+PONDER_RPC_URL_5003=https://rpc.sepolia.mantle.xyz
+START_BLOCK=38879885
+AGENT_REGISTRY_ADDRESS=0x5C8061694C8c1b4A2aB39762754D9a0DC549fBB1
+AGENT_REPUTATION_ORACLE_ADDRESS=0x6a9aff1F4352648b39De2771A1Ed3f0F85E9D764
+SQUADIUM_ADDRESS=0x4299b716F33Be7F43D0Ebf0c1F4863D3fC4b37ec
+LIQUID_REPUTATION_ADDRESS=0xE633d2bBb9D610A3dA777a651C1497257a159557
+REWARD_DISTRIBUTOR_ADDRESS=0x2E4567125B73eEdA6b6B276a7ea7a9a4bd44aC22
+# ORACLE_SIGNER_KEY only if the CCRI push cron runs in the same service
+```
+
+Railway gives the service a public URL like `https://squadium-indexer.up.railway.app`.
+Set that as **`NEXT_PUBLIC_INDEXER_URL`** in the frontend (Vercel env) so the
+dapp's `/oracle`, `/draft`, `/league` read live data.
+
+### Fly.io (alternative)
+
+```bash
+fly launch --dockerfile Dockerfile --no-deploy
+fly postgres create && fly postgres attach <db>
+fly secrets set PONDER_RPC_URL_5003=... START_BLOCK=38879885 AGENT_REGISTRY_ADDRESS=0x... # etc
+fly deploy
+```
+
+### Health / readiness
+
+- `GET /health` — process is up
+- `GET /ready` — returns 200 only when indexing is caught up to realtime;
+  point your uptime monitor + the frontend's "live" badge logic here
+
+Use a `<50ms` roundtrip Postgres for best indexing throughput.
 
 ---
 

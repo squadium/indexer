@@ -1,0 +1,9 @@
+node_modules
+.ponder
+generated
+.env
+.env.local
+.env.*.local
+.git
+*.log
+ccri/.calibration.json
