@@ -17,7 +17,7 @@ import {existsSync, readFileSync, writeFileSync} from "node:fs";
 import {clamp01} from "./types";
 
 const CALIB_PATH = process.env.CCRI_CALIB_PATH ?? "./ccri/.calibration.json";
-const B = 2.2; // crowd-depth slope
+const B = 1.2; // crowd-depth slope — keep blend balanced (model not overpowered)
 
 export interface Calibration {
   a: number; // skill bias; >0 favours model, <0 favours crowd

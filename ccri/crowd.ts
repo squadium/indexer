@@ -17,24 +17,27 @@ export interface CrowdOutput {
 
 /**
  * @param cf            this agent's crowd features (may be undefined → no crowd)
- * @param totalDrafts   total draft picks across ALL agents this cycle (for share)
+ * @param maxDrafts     the highest draftCount in the field (for relative pick)
  * @param uniqueDrafters distinct managers this cycle (participation breadth)
  */
 export function crowdPrior(
   cf: CrowdFeatures | undefined,
-  totalDrafts: number,
+  maxDrafts: number,
   uniqueDrafters: number,
 ): CrowdOutput {
-  if (!cf || totalDrafts === 0) return {rCrowd: 5_000, depth: 0};
+  if (!cf || maxDrafts === 0) return {rCrowd: 5_000, depth: 0};
 
-  const draftShare = cf.draftCount / totalDrafts; // 0..1
+  // Relative pick: how often drafted vs the field leader (0..1). Normalising to
+  // the leader (not total) avoids dilution across a wide field — a heavily
+  // drafted agent reads near 1.0 regardless of roster size.
+  const relativeDraft = Math.min(1, cf.draftCount / maxDrafts);
+  // Captain rate is the conviction signal: being captained = "I trust this one
+  // most". Weighted equally with pick frequency.
   const captainRate = cf.draftCount > 0 ? cf.captainCount / cf.draftCount : 0;
   const stakeEth = Number(cf.stakeDepthWei) / WEI;
   const stakeBoost = Math.min(1, Math.log10(stakeEth + 1) / 2); // 100 mETH ⇒ ~1
 
-  // Crowd score: blend of how often picked, how often trusted as captain,
-  // and how much capital is behind it.
-  const rCrowd01 = 0.45 * sat(draftShare * 6) + 0.3 * captainRate + 0.25 * stakeBoost;
+  const rCrowd01 = 0.4 * relativeDraft + 0.4 * captainRate + 0.2 * stakeBoost;
 
   // Depth: confidence in the crowd signal itself. Needs breadth (many unique
   // drafters) AND skin in the game (stake). Herd of one wallet ⇒ shallow.
@@ -43,6 +46,3 @@ export function crowdPrior(
 
   return {rCrowd: toBps(rCrowd01), depth};
 }
-
-/** soft saturation to keep a runaway draft-share from pinning the score */
-const sat = (x: number): number => x / (1 + x);

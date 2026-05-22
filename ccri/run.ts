@@ -37,8 +37,10 @@ async function main() {
     loadCrowdFeatures(WEEK_ID),
     loadMarketContext(),
   ]);
-  const totalDrafts = [...crowd.values()].reduce((a, c) => a + c.draftCount, 0);
-  const uniqueDrafters = totalDrafts; // proxy; refined when per-manager index lands
+  const draftCounts = [...crowd.values()].map((c) => c.draftCount);
+  const totalDrafts = draftCounts.reduce((a, b) => a + b, 0);
+  const maxDrafts = draftCounts.length ? Math.max(...draftCounts) : 0;
+  const uniqueDrafters = Math.round(totalDrafts / 5); // each squad = 5 picks
 
   console.log(
     `[ccri] agents=${perf.length} crowdRows=${crowd.size} totalDrafts=${totalDrafts} ` +
@@ -52,7 +54,7 @@ async function main() {
   let pushed = 0;
   for (const f of perf) {
     const m = runModel(f, market);
-    const cp = crowdPrior(crowd.get(f.agentId), totalDrafts, uniqueDrafters);
+    const cp = crowdPrior(crowd.get(f.agentId), maxDrafts, uniqueDrafters);
     const b = blend(m.rModel, m.confidence, cp.rCrowd, cp.depth, calib);
 
     const rep: Reputation = {

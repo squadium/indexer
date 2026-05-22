@@ -246,9 +246,12 @@ ponder.on("AgentReputationOracle:ReputationPushed", async ({event, context}) => 
       updatedAt: event.block.timestamp,
     });
 
-  // Mirror tier onto the agent row so the game/leaderboard stay consistent
+  // NOTE: do NOT overwrite agent.tier here. agent.tier is the REGISTRY
+  // salary-cap tier (drives getAgentCost / draft cost) and is set by the
+  // AgentRegistry events. The CCRI reputation tier is a *separate* concept
+  // and lives only in the `reputation` table. Conflating them broke the
+  // /draft cost display. Only bump the freshness marker.
   await context.db.update(agent, {id: agentId}).set({
-    tier: Number(tier),
     lastUpdate: event.block.timestamp,
   });
 });
